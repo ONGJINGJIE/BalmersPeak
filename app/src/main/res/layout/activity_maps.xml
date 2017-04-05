@@ -1,8 +1,33 @@
-<fragment xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:map="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/map"
-    android:name="com.google.android.gms.maps.SupportMapFragment"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+xmlns:tools="http://schemas.android.com/tools"
+android:layout_width="match_parent"
+android:layout_height="match_parent"
+android:orientation="vertical"
+android:paddingBottom="@dimen/activity_vertical_margin"
+android:paddingLeft="@dimen/activity_horizontal_margin"
+android:paddingRight="@dimen/activity_horizontal_margin"
+android:paddingTop="@dimen/activity_vertical_margin"
+tools:context="balmerspeak.balmerspeak.MapsActivity">
+
+
+<EditText
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:id="@+id/editText"
+    android:layout_gravity="center_horizontal"
+    android:hint="Where do you want to go" />
+
+<Button
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Go"
+    android:id="@+id/button"
+    android:onClick="geoLocate"
+    android:layout_gravity="center_horizontal" />
+
+<fragment
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="balmerspeak.balmerspeak.MapsActivity" />
+    android:name="com.google.android.gms.maps.MapFragment"
+    android:id="@+id/mapFragment" />
+</LinearLayout>
