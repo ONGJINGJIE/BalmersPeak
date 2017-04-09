@@ -24,8 +24,8 @@ These instructions will get you a copy of the project up and running on your loc
 #### 3. Import the project to Android Studio
 
 - (1) Download [BalmersPeak](https://github.com/ONGJINGJIE/BalmersPeak) to your computer
-- (2) Launch Android Studio. Go to File->Import Project. 
-- (3) Select the root foler of the project.
+- (2) Launch Android Studio. Go to File->Import Project From Version Control. 
+- (3) Setup your GitHub account and enter [project URL](https://github.com/ONGJINGJIE/BalmersPeak)
 - (4) Click Next->Finish
 
 ## Versioning
