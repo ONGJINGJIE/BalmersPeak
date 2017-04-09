@@ -48,7 +48,7 @@ public class LoginActivity extends AppCompatActivity {
     private View mProgressView;
     private View mLoginFormView;
 
-    DbHandler db = new DbHandler(LoginActivity.this);
+    UserDbHandler db = new UserDbHandler(LoginActivity.this);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

@@ -7,7 +7,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import java.util.ArrayList;
 import java.util.List;
-public class DbHandler extends SQLiteOpenHelper {
+public class UserDbHandler extends SQLiteOpenHelper {
     //all constants as they are static and final(Db=Database)
     //Db Version
     private static final int Db_Version=1;
@@ -20,7 +20,7 @@ public class DbHandler extends SQLiteOpenHelper {
     private static final String User_name="name";
     private static final String User_password="password";
     //constructor here
-    public DbHandler(Context context)
+    public UserDbHandler(Context context)
     {
         super(context,Db_Name,null,Db_Version);
     }

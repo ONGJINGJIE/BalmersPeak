@@ -2,14 +2,18 @@ package balmerspeak.balmerspeak;
 
 import android.Manifest;
 import android.app.Dialog;
+import android.app.ProgressDialog;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
+import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -35,7 +39,18 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -44,6 +59,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     GoogleMap mGoogleMap;
     GoogleApiClient mGoogleApiClient;
+    ProgressDialog pd;
+    ArrayList<Marker> markers = new ArrayList<Marker>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,6 +71,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         } else {
             // No Google Maps Layout
         }
+        new JsonTask().execute("https://data.gov.sg/api/action/datastore_search?resource_id=139a3035-e624-4f56-b63f-89ae28d4ae4c");
     }
 
     private void initMap() {
@@ -81,13 +99,13 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         mGoogleMap = googleMap;
 
 
-        if(mGoogleMap != null){
+        if (mGoogleMap != null) {
 
 
-            mGoogleMap.setOnMapLongClickListener(new GoogleMap.OnMapLongClickListener() {
+            /*mGoogleMap.setOnMapLongClickListener(new GoogleMap.OnMapLongClickListener() {
                 @Override
                 public void onMapLongClick(LatLng latLng) {
-                    MapsActivity.this.setMarker("Local", latLng.latitude, latLng.longitude);
+                    MapsActivity.this.setMarker(latLng.latitude, latLng.longitude);
                 }
             });
 
@@ -122,12 +140,11 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     marker.showInfoWindow();
 
 
-
                 }
-            });
+            });*/
 
 
-            mGoogleMap.setInfoWindowAdapter(new GoogleMap.InfoWindowAdapter(){
+            mGoogleMap.setInfoWindowAdapter(new GoogleMap.InfoWindowAdapter() {
 
                 @Override
                 public View getInfoWindow(Marker marker) {
@@ -138,15 +155,12 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 public View getInfoContents(Marker marker) {
                     View v = getLayoutInflater().inflate(R.layout.info_window, null);
 
-                    TextView tvLocality = (TextView) v.findViewById(R.id.tv_locality);
-                    TextView tvLat = (TextView) v.findViewById(R.id.tv_lat);
-                    TextView tvLng = (TextView) v.findViewById(R.id.tv_lng);
+                    TextView tvAddr = (TextView) v.findViewById(R.id.tv_address);
                     TextView tvSnippet = (TextView) v.findViewById(R.id.tv_snippet);
 
-                    LatLng ll = marker.getPosition();
-                    tvLocality.setText(marker.getTitle());
-                    tvLat.setText("Latitude: " + ll.latitude);
-                    tvLng.setText("Longitude: " + ll.longitude);
+                    tvSnippet.setSingleLine(false);
+
+                    tvAddr.setText(marker.getTitle());
                     tvSnippet.setText(marker.getSnippet());
 
                     return v;
@@ -156,28 +170,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
 
         goToLocationZoom(1.290270, 103.851959, 15);
-
-//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-//            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-//                // TODO: Consider calling
-//                //    public void requestPermissions(@NonNull String[] permissions, int requestCode)
-//                // here to request the missing permissions, and then overriding
-//                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-//                //                                          int[] grantResults)
-//                // to handle the case where the user grants the permission. See the documentation
-//                // for Activity#requestPermissions for more details.
-//                return;
-//            }
-//        }
-//        mGoogleMap.setMyLocationEnabled(true);
-
-//        mGoogleApiClient = new GoogleApiClient.Builder(this)
-//                .addApi(LocationServices.API)
-//                .addConnectionCallbacks(this)
-//                .addOnConnectionFailedListener(this)
-//                .build();
-//        mGoogleApiClient.connect();
-
 
     }
 
@@ -192,76 +184,109 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         CameraUpdate update = CameraUpdateFactory.newLatLngZoom(ll, zoom);
         mGoogleMap.moveCamera(update);
 
-
-
     }
-
-    Marker marker;
 
     public void geoLocate(View view) throws IOException {
 
         EditText et = (EditText) findViewById(R.id.editText);
         String location = et.getText().toString();
 
-        Geocoder gc = new Geocoder(this);
-        List<Address> list = gc.getFromLocationName(location, 1);
-        Address address = list.get(0);
-        String locality = address.getLocality();
+        HttpURLConnection connection = null;
+        BufferedReader reader = null;
+        String result = null;
+        JSONObject json = null;
 
-        double lat = address.getLatitude();
-        double lng = address.getLongitude();
+        String[] split = location.split(" ");
+
+        String query_url = "https://maps.googleapis.com/maps/api/geocode/json?address=";
+
+        for (String i : split ){
+            query_url.concat(i);
+            query_url.concat("+");
+        }
+
+        query_url.concat("&key=AIzaSyBTH1ISvHGUlATrB9NBMxlTjNLbMFHccnE");
+
+        try {
+            URL url = new URL(query_url);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.connect();
+
+
+            InputStream stream = connection.getInputStream();
+
+            reader = new BufferedReader(new InputStreamReader(stream));
+
+            StringBuffer buffer = new StringBuffer();
+            String line = "";
+
+            while ((line = reader.readLine()) != null) {
+                buffer.append(line + "\n");
+                Log.d("Response: ", "> " + line);   //here u ll get whole response...... :-)
+            }
+
+            result = buffer.toString();
+            
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+            try {
+                if (reader != null) {
+                    reader.close();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        try {
+            json = new JSONObject(result);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        double lat = 0;
+        double lng = 0;
+        String addr = null;
+        try {
+            addr = json.getJSONArray("results").getJSONObject(0).getString("formatted_address");
+            lat = json.getJSONArray("results").getJSONObject(0).getJSONObject("geometry").getJSONObject("location").getDouble("lat");
+            lng = json.getJSONArray("results").getJSONObject(0).getJSONObject("geometry").getJSONObject("location").getDouble("lng");
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
         goToLocationZoom(lat, lng, 15);
 
-        setMarker(locality, lat, lng);
+        setMarker(addr, lat, lng, null);
 
     }
 
-
-//    Circle circle;
-
-//    Marker marker1;
-//    Marker marker2;
-//    Polyline line;
-
-
-    ArrayList<Marker> markers = new ArrayList<Marker>();
     static final int POLYGON_POINTS = 5;
     Polygon shape;
 
-    private void setMarker(String locality, double lat, double lng) {
-//        if(marker != null){
-//            removeEverything();
-//        }
+    private void setMarker(String locality, double lat, double lng, String snippet) {
 
-        if(markers.size() == POLYGON_POINTS){
+        /*if (markers.size() == POLYGON_POINTS) {
             removeEverything();
-        }
+        }*/
 
         MarkerOptions options = new MarkerOptions()
                 .title(locality)
-                .draggable(true)
-                .icon(BitmapDescriptorFactory.fromResource(R.mipmap.ic_launcher))
+                .draggable(false)
                 .position(new LatLng(lat, lng))
-                .snippet("I am Here");
+                .snippet(snippet);
 
-        markers.add(mGoogleMap.addMarker(options));
+        mGoogleMap.addMarker(options);
 
-        if(markers.size() == POLYGON_POINTS){
+        /*if (markers.size() == POLYGON_POINTS) {
             drawPolygon();
-        }
-
-//        if(marker1 == null) {
-//            marker1 = mGoogleMap.addMarker(options);
-//        } else if(marker2 == null) {
-//            marker2 = mGoogleMap.addMarker(options);
-//            drawLine();
-//        } else {
-//            removeEverything();
-//            marker1 = mGoogleMap.addMarker(options);
-//        }
-
-//        circle = drawCircle(new LatLng(lat, lng));
-
+        }*/
     }
 
     private void drawPolygon() {
@@ -270,7 +295,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .strokeWidth(3)
                 .strokeColor(Color.RED);
 
-        for(int i=0; i<POLYGON_POINTS;i++){
+        for (int i = 0; i < POLYGON_POINTS; i++) {
             options.add(markers.get(i).getPosition());
         }
         shape = mGoogleMap.addPolygon(options);
@@ -278,7 +303,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     private void removeEverything() {
-        for(Marker marker : markers) {
+        for (Marker marker : markers) {
             marker.remove();
         }
         markers.clear();
@@ -286,39 +311,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         shape = null;
 
     }
-
-//    private void drawLine() {
-//
-//        PolylineOptions options = new PolylineOptions()
-//                .add(marker1.getPosition())
-//                .add(marker2.getPosition())
-//                .color(Color.BLUE)
-//                .width(3);
-//
-//        line = mGoogleMap.addPolyline(options);
-//    }
-
-//    private Circle drawCircle(LatLng latLng) {
-//
-//        CircleOptions options = new CircleOptions()
-//                .center(latLng)
-//                .radius(1000)
-//                .fillColor(0x33FF0000)
-//                .strokeColor(Color.BLUE)
-//                .strokeWidth(3);
-//
-//        return mGoogleMap.addCircle(options);
-//    }
-
-//    private void removeEverything(){
-//        marker1.remove();
-//        marker1 = null;
-//        marker2.remove();
-//        marker2 = null;
-//        line.remove();
-////        circle.remove();
-////        circle = null;
-//    }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -386,12 +378,162 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     @Override
     public void onLocationChanged(Location location) {
-        if(location == null){
+        if (location == null) {
             Toast.makeText(this, "Cant get current location", Toast.LENGTH_LONG).show();
         } else {
             LatLng ll = new LatLng(location.getLatitude(), location.getLongitude());
             CameraUpdate update = CameraUpdateFactory.newLatLngZoom(ll, 15);
             mGoogleMap.animateCamera(update);
+        }
+    }
+
+
+    private class JsonTask extends AsyncTask<String, String, String> {
+
+        protected void onPreExecute() {
+            super.onPreExecute();
+
+            pd = new ProgressDialog(MapsActivity.this);
+            pd.setMessage("Please wait");
+            pd.setCancelable(false);
+            pd.show();
+        }
+
+        protected String doInBackground(String... params) {
+
+
+            HttpURLConnection connection = null;
+            BufferedReader reader = null;
+
+            try {
+                URL url = new URL(params[0]);
+                connection = (HttpURLConnection) url.openConnection();
+                connection.connect();
+
+
+                InputStream stream = connection.getInputStream();
+
+                reader = new BufferedReader(new InputStreamReader(stream));
+
+                StringBuffer buffer = new StringBuffer();
+                String line = "";
+
+                while ((line = reader.readLine()) != null) {
+                    buffer.append(line + "\n");
+                    Log.d("Response: ", "> " + line);   //here u ll get whole response...... :-)
+
+                }
+
+                return buffer.toString();
+
+
+            } catch (MalformedURLException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                if (connection != null) {
+                    connection.disconnect();
+                }
+                try {
+                    if (reader != null) {
+                        reader.close();
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(String result) {
+            super.onPostExecute(result);
+            if (pd.isShowing()) {
+                pd.dismiss();
+            }
+            try {
+                JSONObject json = new JSONObject(result);
+                JSONArray carparks = json.getJSONObject("result").getJSONArray("records");
+                for (int i = 0; i < carparks.length(); i++) {
+                    StringBuilder sb = new StringBuilder("");
+                    JSONObject carpark = carparks.getJSONObject(i);
+                    String short_term_parking = carpark.getString("short_term_parking");
+                    String car_park_type = carpark.getString("car_park_type");
+                    String y_coord = carpark.getString("y_coord");
+                    String x_coord = carpark.getString("x_coord");
+                    String free_parking = carpark.getString("free_parking");
+                    String night_parking = carpark.getString("night_parking");
+                    String address = carpark.getString("address");
+                    String type_of_parking_system = carpark.getString("type_of_parking_system");
+                    sb.append("Carpark Type: ");
+                    sb.append(car_park_type);
+                    sb.append("\nParkingSystem Type: ");
+                    sb.append(type_of_parking_system);
+                    sb.append("\nShort Term Parking: ");
+                    sb.append(short_term_parking);
+                    sb.append("\nFree Parking: ");
+                    sb.append(free_parking);
+                    sb.append("\nNight Parking: ");
+                    sb.append(night_parking);
+                    String snippet = sb.toString();
+
+                    /*start of conversion of coordinates
+                    HttpURLConnection connection = null;
+                    BufferedReader reader = null;
+
+                    LatLng latlong = null;
+                    try {
+                        URL url = new URL("http://tasks.arcgisonline.com/ArcGIS/rest/services/Geometry/GeometryServer/project?inSR=3414&outSR=4326&geometries=%7B\"geometryType\"%3A\"esriGeometryPoint\"%2C\"geometries\"%3A%5B%7B\"x\"%3A" + x_coord + "%2C\"y\"%3A" + y_coord + "%7D%5D%7D&f=pjson");
+                        connection = (HttpURLConnection) url.openConnection();
+                        connection.connect();
+
+
+                        InputStream stream = connection.getInputStream();
+
+                        reader = new BufferedReader(new InputStreamReader(stream));
+
+                        StringBuffer buffer = new StringBuffer();
+                        String line = "";
+
+                        while ((line = reader.readLine()) != null) {
+                            buffer.append(line + "\n");
+                            Log.d("Response: ", "> " + line);   //here u ll get whole response...... :-)
+
+                        }
+
+                        JSONObject latlng = new JSONObject(buffer.toString()).getJSONArray("geometries").getJSONObject(0);
+
+                        latlong = new LatLng(latlng.getDouble("x"), latlng.getDouble("y"));
+
+                    } catch (MalformedURLException e) {
+                        e.printStackTrace();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    } finally {
+                        if (connection != null) {
+                            connection.disconnect();
+                        }
+                        try {
+                            if (reader != null) {
+                                reader.close();
+                            }
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    //end of conversion
+
+                    markers.add(mGoogleMap.addMarker(new MarkerOptions()
+                            .title(address)
+                            .position(latlong)
+                            .snippet(snippet)
+                    ));*/
+                }
+
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
         }
     }
 }
